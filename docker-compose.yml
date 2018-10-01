@@ -1,0 +1,11 @@
+version: '3.4'
+services:
+  blebridge:
+    build:
+      context: .
+    image: blebridge
+
+    network_mode: host
+    cap_add:
+      - net_raw
+      - net_admin
