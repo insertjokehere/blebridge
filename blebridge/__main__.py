@@ -19,15 +19,18 @@ class ScanDelegate(DefaultDelegate):
     def handleDiscovery(self, dev, isNewDev, isNewData):
         global devices
         if isNewDev:
-            driver = drivers.Driver.for_address(dev.addr)
+            driver = drivers.Driver.for_scan_result(dev)
             if driver is not None:
-                device = driver(dev.addr)
+                device = driver(dev)
                 if device.update_every is not None:
                     schedule.every(device.update_every.seconds).seconds.do(device.update)
                 devices[dev.addr] = device
                 logger.debug("Discovered device {}, using driver {}".format(dev.addr, driver))
             else:
                 logger.debug("Discovered device {}, but no driver available".format(dev.addr))
+        else:
+            if dev.addr in devices:
+                devices[dev.addr].scan_update(dev)
 
 
 class ScanThread(Thread):

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from bluepy.btle import Peripheral
+from bluepy.btle import Peripheral, ADDR_TYPE_PUBLIC
 from logging import getLogger
 
 
@@ -10,32 +10,75 @@ class Driver:
     }
 
     @classmethod
-    def for_address(cls, address):
-        return TestDriver
+    def for_scan_result(cls, result):
+        if result.addrType == ADDR_TYPE_PUBLIC:
+            if result.addr.startswith("C4:7C:8D:"):
+                return MiFloraDriver
+            else:
+                return PresenceDriver
 
-    def __init__(self, address, **kwargs):
-        self._address = address
-        self.logger = getLogger(self._address)
+    def __init__(self, device, **kwargs):
+        self.address = device.addr
+        self.logger = getLogger(self.address)
 
+        self.scan_update(device)
+
+        self._config = kwargs
         for k, v in self.DEFAULTS.items():
-            kwargs.setdefault(k, v)
+            self._config.setdefault(k, v)
 
-        self.update_every = kwargs.get('update_every', None)
+        self.update_every = self._config.get('update_every', None)
         if self.update_every is not None:
             self.update_every = timedelta(seconds=self.update_every)
 
     @property
     def peripheral(self):
-        return Peripheral(self._address)
+        return Peripheral(self.address)
 
     def update(self):
         self.logger.warning("This device does not support periodic updates")
 
+    def scan_update(self, result):
+        self.rssi = result.rssi
+        self.last_seen = datetime.now()
+        self.logger.debug("Scan update, rssi {}dB".format(self.rssi))
 
-class TestDriver(Driver):
+
+class PresenceDriver(Driver):
+
+    DEFAULTS = {
+        'update_every': 60,
+        'scan_timeout': 60
+    }
+
+    def __init__(self, *args, **kwargs):
+        Driver.__init__(self, *args, **kwargs)
+        self.present = True
+
+    @property
+    def scan_timeout(self):
+        return timedelta(seconds=self._config['scan_timeout'])
+
+    @property
+    def has_timedout(self):
+        return self.last_seen < datetime.now() - self.scan_timeout
 
     def update(self):
-        self.logger.info("Update for device")
+        if self.has_timedout and self._found:
+            self.present = False
+            self.logger.info("Device disappeared")
+
+    def scan_update(self, result):
+        Driver.scan_update(self, result)
+        self.present = True
+
+    def serialize(self):
+        return {
+            x: getattr(self, x) for x in [
+                'present',
+                'last_seen'
+            ]
+        }
 
 
 class MiFloraDriver(Driver):
@@ -86,7 +129,8 @@ class MiFloraDriver(Driver):
                 'brightness',
                 'moisture',
                 'conductivity',
-                'last_update'
+                'last_update',
+                'last_seen'
             ]
         }
 
