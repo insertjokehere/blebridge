@@ -1,4 +1,4 @@
-from schedule import CancelJob
+import schedule
 from struct import unpack
 from datetime import datetime, timedelta
 from bluepy.btle import Peripheral, ADDR_TYPE_PUBLIC, BTLEException
@@ -19,8 +19,9 @@ class Driver:
             else:
                 return PresenceDriver
 
-    def __init__(self, device, **kwargs):
+    def __init__(self, device, mqtt_host, **kwargs):
         self.address = device.addr
+        self.mqtt = mqtt_host
         self.logger = getLogger(self.address)
 
         self.scan_update(device)
@@ -43,9 +44,12 @@ class Driver:
         except:
             self.logger.exception("Update failed")
 
-    def do_initial_update(self):
-        self.do_update()
-        return CancelJob
+    def do_update_once(self):
+        def _update(self):
+            self.do_update()
+            return schedule.CancelJob
+
+        schedule.every(1).seconds.do(_update)
 
     def update(self):
         self.logger.warning("This device does not support periodic updates")
