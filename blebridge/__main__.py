@@ -23,6 +23,7 @@ class ScanDelegate(DefaultDelegate):
             if driver is not None:
                 device = driver(dev)
                 if device.update_every is not None:
+                    device.update()
                     schedule.every(device.update_every.seconds).seconds.do(device.update)
                 devices[dev.addr] = device
                 logger.debug("Discovered device {}, using driver {}".format(dev.addr, driver))

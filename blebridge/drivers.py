@@ -13,7 +13,7 @@ class Driver:
     @classmethod
     def for_scan_result(cls, result):
         if result.addrType == ADDR_TYPE_PUBLIC:
-            if result.addr.startswith("C4:7C:8D:"):
+            if result.addr.startswith("c4:7c:8d:"):
                 return MiFloraDriver
             else:
                 return PresenceDriver
