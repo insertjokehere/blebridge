@@ -1,6 +1,7 @@
+from schedule import CancelJob
 from struct import unpack
 from datetime import datetime, timedelta
-from bluepy.btle import Peripheral, ADDR_TYPE_PUBLIC
+from bluepy.btle import Peripheral, ADDR_TYPE_PUBLIC, BTLEException
 from logging import getLogger
 
 
@@ -35,6 +36,16 @@ class Driver:
     @property
     def peripheral(self):
         return Peripheral(self.address)
+
+    def do_update(self):
+        try:
+            self.update()
+        except:
+            self.logger.exception("Update failed")
+
+    def do_initial_update(self):
+        self.do_update()
+        return CancelJob
 
     def update(self):
         self.logger.warning("This device does not support periodic updates")
@@ -111,7 +122,12 @@ class MiFloraDriver(Driver):
         # Only update firmware version/battery state every ~24 hours
         if self._fw_version_next_check is None or \
            self._fw_version_next_check < datetime.now():
-            result = self.peripheral.readCharacteristic(self.HANDLE_READ_VERSION_BATTERY)
+            try:
+                result = self.peripheral.readCharacteristic(self.HANDLE_READ_VERSION_BATTERY)
+            except BTLEException:
+                self.logger.exception("Failed to read firmware version")
+                result = None
+
             if result:
                 self.battery = result[0]
                 self._fw_version = "".join([chr(x) for x in result[2:]])
@@ -142,9 +158,16 @@ class MiFloraDriver(Driver):
 
         connection = self.peripheral
         if self.fw_version >= "2.6.6":
-            connection.writeCharacteristic(self.HANDLE_WRITE_MODE_CHANGE, self.DATA_MODE_CHANGE, True)
+            try:
+                connection.writeCharacteristic(self.HANDLE_WRITE_MODE_CHANGE, self.DATA_MODE_CHANGE, True)
+            except BTLEException:
+                self.logger.exception("Failed to put device into update mode")
 
-        response = connection.readCharacteristic(self.HANDLE_READ_SENSOR_DATA)
+        try:
+            response = connection.readCharacteristic(self.HANDLE_READ_SENSOR_DATA)
+        except BTLEException:
+            self.logger.exception("Failed to read sensor data")
+
         if self._is_valid(response):
             temp, self.brightness, self.moisture, self.conductivity = unpack('<hxIBhxxxxxx', response)
             self.temperature = temp / 10.0
