@@ -1,3 +1,4 @@
+from struct import unpack
 from datetime import datetime, timedelta
 from bluepy.btle import Peripheral, ADDR_TYPE_PUBLIC
 from logging import getLogger
@@ -135,4 +136,27 @@ class MiFloraDriver(Driver):
         }
 
     def update(self):
-        pass
+        if self.fw_version is None:
+            self.logger.warning("Failed to fetch basic device details")
+            return
+
+        connection = self.peripheral
+        if self.fw_version >= "2.6.6":
+            connection.writeCharacteristic(self.HANDLE_WRITE_MODE_CHANGE, self.DATA_MODE_CHANGE, True)
+
+        response = connection.readCharacteristic(self.HANDLE_READ_SENSOR_DATA)
+        if self._is_valid(response):
+            temp, self.brightness, self.moisture, self.conductivity = unpack('<hxIBhxxxxxx', response)
+            self.temperature = temp / 10.0
+            self.last_update = datetime.now()
+            self.logger.debug("Updated: {}".format(self.serialize()))
+
+    def _is_valid(self, data):
+        if data[7] > 100:
+            return False
+        elif self.fw_version >= "2.6.6" and sum(data[10:]) == 0:
+            return False
+        elif sum(data) == 0:
+            return False
+        else:
+            return True
